@@ -1,0 +1,114 @@
+import telebot
+from telebot import types
+from currency_converter import CurrencyConverter
+
+bot_token = '6942776243:AAH9VHFsBLTmu0Xo8EXdB2zs5PAVF8KjBHw'
+bot = telebot.TeleBot(bot_token)
+c = CurrencyConverter()
+dann = 0
+from_currency = ''
+to_currency = ''
+
+@bot.message_handler(commands=['start'])
+def start(message):
+    bot.send_message(message.chat.id,f"Здравствуйте, {message.from_user.first_name}! Здесь Вы можете конвертировать представленные ниже валюты.")
+    markup = types.ReplyKeyboardMarkup(row_width=2)
+    btn1 = types.KeyboardButton('Конвертировать')
+    btn2 = types.KeyboardButton('Значения валют')
+    markup.add(btn1, btn2)
+    bot.send_message(message.chat.id, "Нажмите на кнопку /Значения валют/ для более комфортного использования", reply_markup=markup)
+
+@bot.message_handler(func=lambda message: True)
+def ask(message):
+    if message.text == 'Конвертировать':
+        bot.send_message(message.chat.id, "Введите сумму для конвертации:")
+        bot.register_next_step_handler(message, get_amount)
+    elif message.text == 'Значения валют':
+        text = '\n'.join([
+            'USD - Доллар США',
+            'EUR - Евро',
+            'RUB - Российский рубль',
+            'JPY - Японская иена',
+            'CNY - Китайский юань',
+            'TRY - Турецкая лира',
+            'GBP - Британский фунт стерлингов'
+        ])
+        bot.send_message(message.chat.id, text)
+
+
+def get_amount(message):
+    global dann
+    try:
+        dann = float(message.text)
+        if dann == 0:
+            bot.send_message(message.chat.id, "А что Вы хотели вообще?! Из 0$ получить 1.000€ , ну У Д А Ч И ")
+            bot.register_next_step_handler(message, get_amount)
+            return
+        ask_from_currency(message)
+    except ValueError:
+        bot.reply_to(message, 'И зачем мне это? Введите, пожалуйста, корректную сумму))))))')
+        bot.register_next_step_handler(message, get_amount)
+
+
+def ask_from_currency(message):
+    markup = types.InlineKeyboardMarkup(row_width=3)
+    btn1_1 = types.InlineKeyboardButton('USD', callback_data='from_USD')
+    btn1_2 = types.InlineKeyboardButton('EUR', callback_data='from_EUR')
+    btn1_3 = types.InlineKeyboardButton('JPY', callback_data='from_JPY')
+    btn1_4 = types.InlineKeyboardButton('RUB', callback_data='from_RUB')
+    btn1_5 = types.InlineKeyboardButton('CNY', callback_data='from_CNY')
+    btn1_6 = types.InlineKeyboardButton('TRY', callback_data='from_TRY')
+    markup.add(btn1_1, btn1_2, btn1_3, btn1_4, btn1_5, btn1_6)
+    bot.send_message(message.chat.id, "Выберите валюту, из которой хотите конвертировать:", reply_markup=markup)
+
+
+@bot.callback_query_handler(func=lambda call: from_currency == '' or to_currency == '')
+def callback(call):
+    global from_currency
+    global to_currency
+    type, currency = call.data.split('_')
+    if type == 'from':
+        from_currency = currency
+        ask_to_currency(call.message)
+    elif type == 'to':
+        to_currency = currency
+        convert_currency(call)
+
+
+def ask_to_currency(message):
+    markup = types.InlineKeyboardMarkup(row_width=3)
+    btn1_1 = types.InlineKeyboardButton('USD', callback_data='to_USD')
+    btn1_2 = types.InlineKeyboardButton('EUR', callback_data='to_EUR')
+    btn1_3 = types.InlineKeyboardButton('GBP', callback_data='to_GBP')
+    btn1_4 = types.InlineKeyboardButton('JPY', callback_data='to_JPY')
+    btn1_5 = types.InlineKeyboardButton('CNY', callback_data='to_CNY')
+    btn1_6 = types.InlineKeyboardButton('TRY', callback_data='to_TRY')
+    markup.add(btn1_1, btn1_2, btn1_3, btn1_4, btn1_5, btn1_6)
+    bot.send_message(message.chat.id, "Выберите валюту, в которую хотите конвертировать:", reply_markup=markup)
+
+
+def convert_currency(call):
+    if from_currency and to_currency and dann > 0:
+        new_amount = c.convert(dann, from_currency, to_currency)
+        bot.send_message(call.message.chat.id, f'{dann} {from_currency} = {round(new_amount, 1)} {to_currency}')
+    ask(call.message)
+
+
+def convert_currency(call):
+    if from_currency and to_currency and dann > 0:
+        new_amount = c.convert(dann, from_currency, to_currency)
+        markup = types.InlineKeyboardMarkup(row_width=2)
+        btn2 = types.InlineKeyboardButton('Рассчитать для других валют', callback_data='new_conversion')
+        markup.add(btn2)
+        bot.send_message(call.message.chat.id, f'{dann} {from_currency} = {round(new_amount, 1)} {to_currency}', reply_markup=markup)
+
+@bot.callback_query_handler(func=lambda call: call.data in ['new_conversion'])
+def callback(call):
+    if call.data == 'new_conversion':
+        global from_currency, to_currency
+        from_currency = ''
+        to_currency = ''
+        bot.send_message(call.message.chat.id, "Введите сумму для конвертации:")
+        bot.register_next_step_handler(call.message, get_amount)
+
+bot.polling(none_stop=True)
